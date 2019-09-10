@@ -1223,6 +1223,42 @@ void cancel_menu()
   send_cmd(KEY_CANCEL);
 }
 
+
+/*
+* Returns the result of stristr (strstr) if there is any match.  Returns nullptr otherwise.
+*/
+
+char* compareAndCareStrings(const char* str1, const char* str2)
+{
+	if (srt1 != NULL) {
+		char* ptr = stristr(aq_data->last_message, str2);
+		if (ptr != NULL) { // match
+			logMessage(LOG_DEBUG, "Programming mode: String MATCH '%s'\n", str2);
+			if (str2 == message1) // match & don't care if first char
+				return ptr;
+			else if (ptr == aq_data->last_message) // match & do care if first char
+				return ptr;
+		}
+	}
+	return nullptr;
+}
+
+/*
+* Returns the entire string UNLESS there is a caret (^) character at the front.  If so, everything after that is returned.
+* Example: "^Hello World\0" returns "Hello World\0".
+*/
+
+char* stripCaretFromFrontOfString(const char* str1)
+{	
+	if (str1 != NULL) {
+		if (str1[0] == '^')
+			return &str1[1];
+		else
+			return str1;
+	}
+	return NULL;
+}
+
 /*
 * added functionality, if start of string is ^ use that as must start with in comparison
 */
@@ -1230,65 +1266,38 @@ void cancel_menu()
 bool waitForEitherMessage(struct aqualinkdata *aq_data, char* message1, char* message2, int numMessageReceived)
 {
   //logMessage(LOG_DEBUG, "waitForMessage %s %d %d\n",message,numMessageReceived,cmd);
-  int i=0;
   pthread_mutex_lock(&aq_data->active_thread.thread_mutex);
-  char* msgS1 = "";
-  char* msgS2 = "";
+  
+  char* msgS1 = stripCaretFromFrontOfString(message1);
+  char* msgS2 = stripCaretFromFrontOfString(message2);
   char* ptr = NULL;
-  
-  
-  if (message1 != NULL) {
-    if (message1[0] == '^')
-      msgS1 = &message1[1];
-    else
-      msgS1 = message1;
-  }
-  if (message2 != NULL) {
-    if (message2[0] == '^')
-      msgS2 = &message2[1];
-    else
-      msgS2 = message2;
-  }
-  
+
+  int i = 0;
   while( ++i <= numMessageReceived)
   {
     logMessage(LOG_DEBUG, "Programming mode: loop %d of %d looking for '%s' OR '%s' received message1 '%s'\n",i,numMessageReceived,message1,message2,aq_data->last_message);
     
-    if (message1 != NULL) {
-      ptr = stristr(aq_data->last_message, msgS1);
-      if (ptr != NULL) { // match
-        logMessage(LOG_DEBUG, "Programming mode: String MATCH '%s'\n", msgS1);
-        if (msgS1 == message1) // match & don't care if first char
-          break;
-        else if (ptr == aq_data->last_message) // match & do care if first char
-          break;
-      }
-    }
-    if (message2 != NULL) {
-      ptr = stristr(aq_data->last_message, msgS2);
-      if (ptr != NULL) { // match
-        logMessage(LOG_DEBUG, "Programming mode: String MATCH '%s'\n", msgS2);
-        if (msgS2 == message2) // match & don't care if first char
-          break;
-        else if (ptr == aq_data->last_message) // match & do care if first char
-          break;
-      }
-    }
+	if (nullptr != (ptr = compareAndCareStrings(message1, msgS1))) break;
+	if (nullptr != (ptr = compareAndCareStrings(message2, msgS2))) break;
     
     //logMessage(LOG_DEBUG, "Programming mode: looking for '%s' received message1 '%s'\n",message1,aq_data->last_message);
     pthread_cond_wait(&aq_data->active_thread.thread_cond, &aq_data->active_thread.thread_mutex);
     //logMessage(LOG_DEBUG, "Programming mode: loop %d of %d looking for '%s' received message1 '%s'\n",i,numMessageReceived,message1,aq_data->last_message);
   }
   
-  pthread_mutex_unlock(&aq_data->active_thread.thread_mutex);
-  
-  if (message1 != NULL && message2 != NULL && ptr == NULL) {
+  if (message1 != NULL && 
+	  message2 != NULL && 
+	  ptr == NULL)
+  {
     //logmessage1(LOG_ERR, "Could not select MENU of Aqualink control panel\n");
-    logMessage(LOG_DEBUG, "Programming mode: did not find '%s'\n",message1);
+    logMessage(LOG_DEBUG, "Programming mode: did not find '%s'\n", message1);
     return false;
   }
+
   logMessage(LOG_DEBUG, "Programming mode: found message1 '%s' or '%s' in '%s'\n",message1,message2,aq_data->last_message);
   
+  pthread_mutex_unlock(&aq_data->active_thread.thread_mutex);
+
   return true;
 }
 
